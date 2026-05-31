@@ -8,3 +8,4 @@ temp-freepats
 temp-sfz-extract
 *.local
 .DS_Store
+.gstack/

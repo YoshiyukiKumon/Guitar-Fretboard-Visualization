@@ -70,7 +70,14 @@
 
 - **設定 > 再生音**: 楽器ごとにリピート / その他のラジオ + ▶ 試聴
 - **設定 > 音量**: 練習画面と同じスライダー
+- **設定画面フッター**: リリースノート（`public/changelog.html`）へのリンク
 - 新規セクションは `src/ui/settings-view.ts` の `SETTINGS_SECTIONS` に追加
+
+## リリースノート
+
+- Markdown: リポジトリ直下 `CHANGELOG.md`
+- HTML: `public/changelog.html`（ビルド後 `dist/changelog.html`、スタンドアロン同梱）
+- 設定画面から新規タブで開く（`changelogPageUrl()`）
 
 ## 関連コード
 
@@ -95,3 +102,4 @@
 | 1.5 | 2026-05-20 | iOS バックグラウンド復帰後の AudioContext 再解放・再作成 |
 | 1.6 | 2026-05-24 | 構成音パネル BPM 設定（localStorage `bpm`） |
 | 1.7 | 2026-05-20 | ナイロン基準の pack 最大ピーク平準化（`instrument-playback-gain.ts`） |
+| 1.8 | 2026-05-30 | リリースノート（`CHANGELOG.md` / `changelog.html`）と設定画面リンク |

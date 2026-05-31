@@ -1,12 +1,12 @@
 {
   "name": "guitar-practice",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && npm run build:standalone",
-    "build:standalone": "mkdir -p standalone && cp dist/index.html standalone/guitar-practice.html && cp -r dist/samples standalone/",
+    "build:standalone": "mkdir -p standalone && cp dist/index.html standalone/guitar-practice.html && cp dist/changelog.html standalone/ && cp -r dist/samples standalone/",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -23,5 +23,8 @@
     "vite": "^6.3.5",
     "vite-plugin-singlefile": "^2.2.0",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@fontsource/noto-music": "^5.2.8"
   }
 }

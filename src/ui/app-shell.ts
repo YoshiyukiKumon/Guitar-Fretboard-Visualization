@@ -35,8 +35,9 @@ import {
   type SettingsViewCallbacks,
 } from './settings-view';
 import { createLanguageSwitcher } from './language-switcher';
+import { createSongView } from './song-view';
 
-const APP_MODES: AppMode[] = ['practice', 'library', 'settings'];
+const APP_MODES: AppMode[] = ['practice', 'library', 'song', 'settings'];
 
 export interface AppRenderOptions {
   onAppModeChange: (mode: AppMode) => void;
@@ -55,6 +56,8 @@ export interface AppRenderOptions {
   onStrumPatternChange: (strumPatternId: string) => void;
   onPlaybackInstrumentChange: (instrumentId: InstrumentId) => void;
   onRepeatInstrumentChange: (instrumentId: InstrumentId) => void;
+  onSongIdChange: (songId: string) => void;
+  onEditSongInLibrary: (songId: string) => void;
   libraryState: LibraryViewState;
   onLibraryStateChange: (state: LibraryViewState) => void;
   onLibraryChanged: () => void;
@@ -117,6 +120,20 @@ export function renderApp(
       onVolumeChange: options.onVolumeChange,
     };
     root.appendChild(createSettingsView(settings, settingsCallbacks));
+    return;
+  }
+
+  if (settings.appMode === 'song') {
+    root.appendChild(
+      createSongView(settings, {
+        onSongIdChange: options.onSongIdChange,
+        onBpmChange: options.onBpmChange,
+        onStrumPatternChange: options.onStrumPatternChange,
+        onViewModeChange: options.onViewModeChange,
+        onLabelModeChange: options.onLabelModeChange,
+        onEditSongInLibrary: options.onEditSongInLibrary,
+      }),
+    );
     return;
   }
 

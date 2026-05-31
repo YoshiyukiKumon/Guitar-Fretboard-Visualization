@@ -12,6 +12,10 @@ import {
   listStrumPatterns,
 } from '../domain/music-library/registry';
 import { t } from '../i18n';
+import {
+  createPlaybackToolbarField,
+  createPlaybackToolbarPlayButton,
+} from './playback-toolbar';
 
 export interface TonePanelOptions {
   bpm: number;
@@ -168,7 +172,7 @@ export function createTonePanel(
       const isActive = tonePlayer.isPlaybackActive(buttonId);
       btn.textContent = isActive ? labels.stop : labels.play;
       btn.setAttribute('aria-label', isActive ? labels.ariaStop : labels.ariaPlay);
-      btn.classList.toggle('tone-panel__play--active', isActive);
+      btn.classList.toggle('playback-toolbar__play--active', isActive);
     }
   };
 
@@ -185,7 +189,7 @@ function createPlaybackControls(
   onBpmChange: (bpm: number) => void,
 ): HTMLElement {
   const wrap = document.createElement('div');
-  wrap.className = 'tone-panel__controls';
+  wrap.className = 'playback-toolbar';
 
   wrap.appendChild(
     createStrumPatternSelect(strumPatternId, onStrumPatternChange),
@@ -198,15 +202,8 @@ function createStrumPatternSelect(
   selectedId: string,
   onChange: (strumPatternId: string) => void,
 ): HTMLElement {
-  const wrap = document.createElement('div');
-  wrap.className = 'tone-panel__strum';
-
-  const label = document.createElement('label');
-  label.className = 'tone-panel__strum-label';
-  label.textContent = t('tone.rhythm');
-
   const select = document.createElement('select');
-  select.className = 'tone-panel__strum-select';
+  select.className = 'playback-toolbar__select';
   select.setAttribute('aria-label', t('tone.strumSelectAria'));
 
   for (const item of listStrumPatterns()) {
@@ -221,28 +218,18 @@ function createStrumPatternSelect(
     onChange(select.value);
   });
 
-  label.appendChild(select);
-  wrap.appendChild(label);
-  return wrap;
+  return createPlaybackToolbarField(t('tone.rhythm'), select);
 }
 
 function createBpmControl(bpm: number, onChange: (bpm: number) => void): HTMLElement {
-  const wrap = document.createElement('div');
-  wrap.className = 'tone-panel__bpm';
-
-  const label = document.createElement('label');
-  label.className = 'tone-panel__bpm-label';
-  label.textContent = 'BPM';
-
   const input = document.createElement('input');
   input.type = 'number';
-  input.className = 'tone-panel__bpm-input';
+  input.className = 'playback-toolbar__input';
   input.min = String(MIN_BPM);
   input.max = String(MAX_BPM);
   input.step = '1';
   input.value = String(bpm);
   input.setAttribute('aria-label', t('tone.bpmAria'));
-  label.appendChild(input);
 
   const commit = (): void => {
     const next = clampBpm(Number(input.value));
@@ -253,8 +240,7 @@ function createBpmControl(bpm: number, onChange: (bpm: number) => void): HTMLEle
   input.addEventListener('change', commit);
   input.addEventListener('blur', commit);
 
-  wrap.appendChild(label);
-  return wrap;
+  return createPlaybackToolbarField('BPM', input);
 }
 
 function createToneLines(intervalLine: string, noteNameLine: string): HTMLElement {
@@ -308,9 +294,7 @@ function createTonePlayButton(
   ariaLabel: string,
   onClick?: () => void,
 ): HTMLButtonElement {
-  const playBtn = document.createElement('button');
-  playBtn.type = 'button';
-  playBtn.className = 'tone-panel__play';
+  const playBtn = createPlaybackToolbarPlayButton();
   playBtn.setAttribute('aria-label', ariaLabel);
   playBtn.textContent = label;
   if (onClick !== undefined) {

@@ -39,6 +39,7 @@ export function getAppModeLabels(): Record<AppMode, string> {
   return {
     practice: t('nav.practice'),
     library: t('nav.library'),
+    song: t('nav.song'),
     settings: t('nav.settings'),
   };
 }

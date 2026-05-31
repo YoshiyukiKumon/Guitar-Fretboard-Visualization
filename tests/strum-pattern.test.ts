@@ -58,6 +58,25 @@ describe('parseStrumPatternNotation', () => {
     expect(parsed?.hits.map((hit) => hit.offsetBeats)).toEqual([
       0, 1, 1.5, 2.5, 3,
     ]);
+    expect(parsed?.hits[1]?.chordLookupBeats).toBeCloseTo(0.9999, 4);
+    expect(parsed?.hits[2]?.chordLookupBeats).toBe(1.5);
+  });
+
+  it('defers chord lookup on eighth tied into 8-8 group', () => {
+    const parsed = parseStrumPatternNotation('4, 8, 8-8, 8, 4', '4/4');
+    expect(parsed?.hits.map((hit) => hit.offsetBeats)).toEqual([
+      0, 1, 1.5, 2.5, 3,
+    ]);
+    expect(parsed?.hits[1]?.chordLookupBeats).toBeCloseTo(0.9999, 4);
+    expect(parsed?.hits[2]?.chordLookupBeats).toBe(1.5);
+    expect(parsed?.hits[2]?.tieGroupEndBeats).toBe(2.5);
+  });
+
+  it('marks tie group end for accented 8(>)-8 token', () => {
+    const parsed = parseStrumPatternNotation('4(>), 8, 8(>)-8, 8, 4', '4/4');
+    expect(parsed?.hits[2]?.offsetBeats).toBe(1.5);
+    expect(parsed?.hits[2]?.tieGroupEndBeats).toBe(2.5);
+    expect(parsed?.hits[2]?.accent).toBe(true);
   });
 
   it('parses 3/4 pattern', () => {
@@ -69,7 +88,7 @@ describe('parseStrumPatternNotation', () => {
 
   it('parses 12/8 pattern with rests', () => {
     const parsed = parseStrumPatternNotation(
-      '8, r, 8, 8(>), r, 8, 8, r, 8, 8(>), r, 8',
+      '8, 8(r), 8, 8(>), 8(r), 8, 8, 8(r), 8, 8(>), 8(r), 8',
       '12/8',
     );
     expect(parsed?.measureBeats).toBe(6);
@@ -88,9 +107,13 @@ describe('parseStrumPatternNotation', () => {
     ]);
   });
 
-  it('parses explicit rest length', () => {
-    const parsed = parseStrumPatternNotation('4, r4, 4, 4', '4/4');
+  it('parses explicit rest length with note value', () => {
+    const parsed = parseStrumPatternNotation('4, 4(r), 4, 4', '4/4');
     expect(parsed?.hits.map((hit) => hit.offsetBeats)).toEqual([0, 2, 3]);
+  });
+
+  it('rejects legacy bare r rest token', () => {
+    expect(parseStrumPatternNotation('4, r, 4, 4', '4/4')).toBeNull();
   });
 
   it('rejects pattern that does not fill one measure', () => {

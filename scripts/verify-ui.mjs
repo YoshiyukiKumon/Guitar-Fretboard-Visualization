@@ -38,7 +38,7 @@ async function runChecks(page) {
   assert((await noteNameLines.count()) === 2, 'expected note name lines for scale and chord');
   assert((await noteNameLines.first().textContent())?.includes('C'), 'scale note names expected');
 
-  const playButtons = page.locator('.tone-panel__play');
+  const playButtons = page.locator('.tone-panel .playback-toolbar__play');
   assert((await playButtons.count()) === 4, 'expected scale + chord block + arpeggio + repeat buttons');
   assert(
     (await playButtons.nth(0).textContent()) === '▶ 再生',
@@ -57,11 +57,11 @@ async function runChecks(page) {
     'chord repeat play button label',
   );
 
-  const bpmInput = page.locator('.tone-panel__bpm-input');
+  const bpmInput = page.locator('.tone-panel .playback-toolbar__input');
   assert((await bpmInput.count()) === 1, 'BPM input missing');
   assert((await bpmInput.inputValue()) === '90', 'default BPM should be 90');
 
-  const strumSelect = page.locator('.tone-panel__strum-select');
+  const strumSelect = page.locator('.tone-panel .playback-toolbar__select');
   assert((await strumSelect.count()) === 1, 'strum pattern select missing');
   assert(
     (await strumSelect.inputValue()) === 'builtin-strum-syncopation',
@@ -611,7 +611,7 @@ async function runChecks(page) {
   );
 
   await page.locator('.app-header__mode .segment-switcher__btn[data-mode="library"]').click();
-  const libraryPlay = page.locator('.library-view__play');
+  const libraryPlay = page.locator('.playback-toolbar__play');
   assert((await libraryPlay.count()) >= 1, 'library form should show preview play buttons');
 
   const libraryList = page.locator('.library-view__list');
@@ -637,6 +637,16 @@ async function runChecks(page) {
   assert(
     (await page.locator('.settings-instrument-list__radio:checked').count()) === 1,
     'one instrument should be selected by default',
+  );
+  const changelogLink = page.locator('.settings-view__changelog-link');
+  assert((await changelogLink.count()) === 1, 'settings changelog link missing');
+  assert(
+    (await changelogLink.textContent()) === 'リリースノート',
+    'settings changelog link label',
+  );
+  assert(
+    (await changelogLink.getAttribute('href'))?.endsWith('changelog.html'),
+    'settings changelog link href',
   );
 
   await page.locator('.app-header__mode .segment-switcher__btn[data-mode="practice"]').click();

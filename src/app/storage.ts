@@ -20,6 +20,8 @@ import {
   DEFAULT_STRUM_PATTERN_ID,
 } from '../domain/strum-pattern/strum-pattern';
 import { isKnownStrumPatternId } from '../domain/music-library/registry';
+import { isKnownSongId } from '../domain/song/song-registry';
+import { BUILTIN_SONGS } from '../domain/song/builtin-songs';
 import {
   type AppLocale,
   normalizeLocale,
@@ -27,10 +29,12 @@ import {
 
 const STORAGE_KEY = 'guitar-practice-settings';
 
-export type AppMode = 'practice' | 'library' | 'settings';
+export type AppMode = 'practice' | 'library' | 'song' | 'settings';
 
 export interface AppSettings {
   appMode: AppMode;
+  /** ソングモードで選択中の曲 ID */
+  songId: string;
   instrumentId: InstrumentId;
   /** コードリピート再生の楽器 ID */
   repeatInstrumentId: InstrumentId;
@@ -50,8 +54,11 @@ export interface AppSettings {
   locale: AppLocale;
 }
 
+const DEFAULT_SONG_ID = BUILTIN_SONGS[0]?.id ?? 'builtin-song-ii-v-i-repeat';
+
 const DEFAULT_SETTINGS: AppSettings = {
   appMode: 'practice',
+  songId: DEFAULT_SONG_ID,
   instrumentId: DEFAULT_INSTRUMENT_ID,
   repeatInstrumentId: DEFAULT_INSTRUMENT_ID,
   viewMode: 'scale',
@@ -67,7 +74,16 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 function isAppMode(value: unknown): value is AppMode {
-  return value === 'practice' || value === 'library' || value === 'settings';
+  return (
+    value === 'practice' ||
+    value === 'library' ||
+    value === 'song' ||
+    value === 'settings'
+  );
+}
+
+export function sanitizeSongId(songId: string): string {
+  return isKnownSongId(songId) ? songId : DEFAULT_SONG_ID;
 }
 
 export function sanitizeMusicSelectionIds(
@@ -122,6 +138,9 @@ export function loadSettings(): AppSettings {
         parsed.appMode && isAppMode(parsed.appMode)
           ? parsed.appMode
           : DEFAULT_SETTINGS.appMode,
+      songId: sanitizeSongId(
+        typeof parsed.songId === 'string' ? parsed.songId : DEFAULT_SONG_ID,
+      ),
       instrumentId: normalizeInstrumentId(parsed.instrumentId),
       repeatInstrumentId: normalizeInstrumentId(
         parsed.repeatInstrumentId ?? parsed.instrumentId,

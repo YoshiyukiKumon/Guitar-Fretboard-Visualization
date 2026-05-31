@@ -31,30 +31,33 @@ import {
 import { saveCustomLibrary } from '../domain/music-library/storage';
 import { getToneLabelOptions } from '../domain/music-library/tone-label-options';
 import { createSegmentSwitcher } from './segment-switcher';
+import { createPlaybackToolbarField } from './playback-toolbar';
 import type { StrumPatternDef } from '../domain/strum-pattern/strum-pattern';
 import { parseStrumPatternDef } from '../domain/strum-pattern/strum-pattern';
 import { t } from '../i18n';
+import {
+  renderSongPanel,
+} from './library-song-panels';
+import type { SongBlockDef, SongDef } from '../domain/song/song-types';
 
-export type LibraryTab = 'scale' | 'chord' | 'strum';
+import {
+  createListEditor,
+  resetLibraryListScroll,
+} from './library-list-editor';
 
-const libraryListScrollTop: Record<LibraryTab, number> = {
-  scale: 0,
-  chord: 0,
-  strum: 0,
-};
+export type LibraryTab = 'scale' | 'chord' | 'strum' | 'song';
 
-/** CSV 取込・リセット後はリスト先頭に戻す */
-export function resetLibraryListScroll(): void {
-  libraryListScrollTop.scale = 0;
-  libraryListScrollTop.chord = 0;
-  libraryListScrollTop.strum = 0;
-}
+export { resetLibraryListScroll };
 
 export interface LibraryViewState {
   tab: LibraryTab;
   selectedScaleId: string | null;
   selectedChordId: string | null;
   selectedStrumPatternId: string | null;
+  selectedSongId?: string | null;
+  draftSong?: SongDef | null;
+  /** Forked / edited blocks while composing a new song (not yet saved). */
+  draftSongBlocks?: SongBlockDef[] | null;
   draftScale?: ScaleDef | null;
   draftChord?: ChordDef | null;
   draftStrumPattern?: StrumPatternDef | null;
@@ -81,16 +84,20 @@ export function createLibraryView(
   root.className = 'library-view';
   root.setAttribute('aria-label', t('library.ariaLabel'));
 
+  const activeTab =
+    (state.tab as string) === 'block' ? 'song' : state.tab;
+
   const tabBar = createSegmentSwitcher({
     className: 'segment-switcher library-view__tabs',
     ariaLabel: t('library.tabs.aria'),
-    modes: ['scale', 'chord', 'strum'] as const,
+    modes: ['scale', 'chord', 'strum', 'song'] as const,
     labels: {
       scale: t('library.tabs.scale'),
       chord: t('library.tabs.chord'),
       strum: t('library.tabs.strum'),
+      song: t('library.tabs.song'),
     },
-    active: state.tab,
+    active: activeTab,
     onChange: (tab) => {
       wrappedCallbacks.onStateChange({ ...state, tab });
     },
@@ -109,8 +116,10 @@ export function createLibraryView(
     renderScalePanel(body, state, wrappedCallbacks);
   } else if (state.tab === 'chord') {
     renderChordPanel(body, state, wrappedCallbacks);
-  } else {
+  } else if (state.tab === 'strum') {
     renderStrumPanel(body, state, wrappedCallbacks);
+  } else {
+    renderSongPanel(body, state, wrappedCallbacks);
   }
 
   renderToolbar(toolbar, wrappedCallbacks);
@@ -274,88 +283,6 @@ function renderStrumPanel(
       'strum',
     ),
   );
-}
-
-interface ListEditorConfig {
-  items: { id: string; label: string; badge: string | null }[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onAdd: () => void;
-  renderForm: () => HTMLElement;
-}
-
-function createListEditor(config: ListEditorConfig, tab: LibraryTab): HTMLElement {
-  const wrap = document.createElement('div');
-  wrap.className = 'library-view__split';
-
-  const listPane = document.createElement('div');
-  listPane.className = 'library-view__list-pane';
-
-  const list = document.createElement('ul');
-  list.className = 'library-view__list';
-
-  for (const item of config.items) {
-    const li = document.createElement('li');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'library-view__list-btn';
-    if (item.id === config.selectedId && config.selectedId !== '__new__') {
-      btn.classList.add('library-view__list-btn--active');
-    }
-    btn.textContent = item.label;
-    if (item.badge) {
-      const badge = document.createElement('span');
-      badge.className = 'library-view__badge';
-      badge.textContent = item.badge;
-      btn.appendChild(badge);
-    }
-    btn.addEventListener('click', () => {
-      libraryListScrollTop[tab] = list.scrollTop;
-      config.onSelect(item.id);
-    });
-    li.appendChild(btn);
-    list.appendChild(li);
-  }
-
-  listPane.appendChild(list);
-  bindLibraryListScroll(list, tab);
-
-  const addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.className = 'library-view__add-btn';
-  addBtn.textContent = t('library.add');
-  addBtn.addEventListener('click', config.onAdd);
-  listPane.appendChild(addBtn);
-
-  const formPane = document.createElement('div');
-  formPane.className = 'library-view__form-pane';
-  formPane.appendChild(config.renderForm());
-
-  wrap.appendChild(listPane);
-  wrap.appendChild(formPane);
-  return wrap;
-}
-
-function bindLibraryListScroll(list: HTMLElement, tab: LibraryTab): void {
-  list.addEventListener(
-    'scroll',
-    () => {
-      libraryListScrollTop[tab] = list.scrollTop;
-    },
-    { passive: true },
-  );
-  const savedTop = libraryListScrollTop[tab];
-  if (savedTop <= 0) {
-    return;
-  }
-  requestAnimationFrame(() => {
-    list.scrollTop = savedTop;
-    requestAnimationFrame(() => {
-      if (list.scrollTop !== savedTop) {
-        list.scrollTop = savedTop;
-      }
-    });
-  });
 }
 
 function createStrumPatternForm(
@@ -762,7 +689,7 @@ function createPlaybackRow(
   getPreviewDef: () => ScaleDef | ChordDef,
 ): HTMLElement {
   const row = document.createElement('div');
-  row.className = 'library-view__playback';
+  row.className = 'playback-toolbar';
 
   if (kind === 'scale') {
     row.appendChild(
@@ -806,25 +733,20 @@ function createStrumPreviewRow(
   notationInput: HTMLInputElement,
 ): HTMLElement {
   const row = document.createElement('div');
-  row.className = 'library-view__playback library-view__strum-preview';
-
-  const bpmLabel = document.createElement('label');
-  bpmLabel.className = 'library-view__preview-bpm';
-  bpmLabel.textContent = 'BPM';
+  row.className = 'playback-toolbar library-view__strum-preview';
 
   const bpmInput = document.createElement('input');
   bpmInput.type = 'number';
-  bpmInput.className = 'library-view__preview-bpm-input';
+  bpmInput.className = 'playback-toolbar__input';
   bpmInput.min = String(MIN_BPM);
   bpmInput.max = String(MAX_BPM);
   bpmInput.step = '1';
   bpmInput.value = String(tonePlayer.getBpm() || DEFAULT_BPM);
   bpmInput.setAttribute('aria-label', t('library.preview.bpmAria'));
-  bpmLabel.appendChild(bpmInput);
 
   const playBtn = document.createElement('button');
   playBtn.type = 'button';
-  playBtn.className = 'library-view__play';
+  playBtn.className = 'playback-toolbar__play';
 
   const syncButton = (): void => {
     const isActive = tonePlayer.isPlaybackActive('library:strum-preview');
@@ -837,7 +759,7 @@ function createStrumPreviewRow(
         ? t('library.preview.strumStopAria')
         : t('library.preview.strumAria'),
     );
-    playBtn.classList.toggle('library-view__play--active', isActive);
+    playBtn.classList.toggle('playback-toolbar__play--active', isActive);
   };
 
   const commitBpm = (): void => {
@@ -884,7 +806,7 @@ function createStrumPreviewRow(
   tonePlayer.subscribePlayback(syncButton);
   syncButton();
 
-  row.appendChild(bpmLabel);
+  row.appendChild(createPlaybackToolbarField('BPM', bpmInput));
   row.appendChild(playBtn);
   return row;
 }
@@ -896,7 +818,7 @@ function createLibraryPlayButton(
 ): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'library-view__play';
+  btn.className = 'playback-toolbar__play';
   btn.setAttribute('aria-label', ariaLabel);
   btn.textContent = label;
   btn.addEventListener('click', () => {
@@ -966,6 +888,8 @@ function renderToolbar(
     const msg = t('library.csv.confirmDetail', {
       scaleCount: preview.scales.length,
       chordCount: preview.chords.length,
+      blockCount: preview.songBlocks.length,
+      songCount: preview.songs.length,
     });
     if (!window.confirm(msg)) {
       return;

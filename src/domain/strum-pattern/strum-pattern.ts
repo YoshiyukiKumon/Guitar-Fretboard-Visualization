@@ -4,13 +4,17 @@ export interface StrumPatternDef {
   name: string;
   /** 拍子（例: "4/4", "3/4", "12/8"） */
   timeSignature: string;
-  /** 例: "4, 4(>), 4, 4(>)" / "8, r, 8(>)"（`-` はタイ、`(>)` はアクセント、`r` は休符） */
+  /** 例: "4, 4(>), 4, 4(>)" / "8, 8(r), 8(>)"（`-` はタイ、`(>)` はアクセント、`8(r)` は休符） */
   notation: string;
 }
 
 export interface StrumPatternHit {
   /** 1 小節内のストローク位置（4 分音符拍単位） */
   offsetBeats: number;
+  /** コード解決に使う拍位置（タイで前拍からつながる場合はタイ開始拍） */
+  chordLookupBeats: number;
+  /** タイ開始 hit のみ。半開区間 [offsetBeats, tieGroupEndBeats) 内のコード変更を開始拍から適用 */
+  tieGroupEndBeats?: number;
   /** アクセント（強拍）かどうか */
   accent: boolean;
 }
@@ -65,14 +69,16 @@ export const BUILTIN_STRUM_PATTERNS: readonly StrumPatternDef[] = [
     id: 'builtin-strum-twelve-eight',
     name: 'Shuffle',
     timeSignature: '12/8',
-    notation: '8, r, 8, 8(>), r, 8, 8, r, 8, 8(>), r, 8',
+    notation: '8, 8(r), 8, 8(>), 8(r), 8, 8, 8(r), 8, 8(>), 8(r), 8',
   },
 ];
 
 const ALLOWED_NOTE_VALUES = new Set([2, 4, 8, 16]);
 const BEAT_EPSILON = 0.0001;
+/** コード変更境界の排他比較用（拍単位） */
+export const STRUM_CHORD_LOOKUP_EPSILON = 1e-4;
 const TOKEN_PART_PATTERN = /^(\d+)(\(>\))?$/;
-const REST_TOKEN_PATTERN = /^r(\d+)?$/;
+const REST_TOKEN_PART_PATTERN = /^(\d+)\(r\)$/;
 
 function beatsForNoteValue(noteValue: number): number {
   return 4 / noteValue;
@@ -122,13 +128,10 @@ function parseNoteTokenPart(
   return { noteValue, accent: match[2] === '(>)' };
 }
 
-function parseRestNoteValue(token: string, defaultNoteValue: number): number | null {
-  const match = token.match(REST_TOKEN_PATTERN);
+function parseRestTokenPart(part: string): number | null {
+  const match = part.match(REST_TOKEN_PART_PATTERN);
   if (!match) {
     return null;
-  }
-  if (match[1] === undefined) {
-    return defaultNoteValue;
   }
   const noteValue = Number(match[1]);
   if (!ALLOWED_NOTE_VALUES.has(noteValue)) {
@@ -161,17 +164,14 @@ export function parseStrumPatternNotation(
   }
 
   const measureBeats = measureQuarterBeats(parsedTimeSignature);
-  const restDefault = parsedTimeSignature.beatUnit;
   const hits: StrumPatternHit[] = [];
   let position = 0;
 
-  for (const token of tokens) {
-    if (REST_TOKEN_PATTERN.test(token)) {
-      const noteValue = parseRestNoteValue(token, restDefault);
-      if (noteValue === null) {
-        return null;
-      }
-      position += beatsForNoteValue(noteValue);
+  for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
+    const token = tokens[tokenIndex];
+    const restNoteValue = parseRestTokenPart(token);
+    if (restNoteValue !== null) {
+      position += beatsForNoteValue(restNoteValue);
       continue;
     }
 
@@ -187,10 +187,40 @@ export function parseStrumPatternNotation(
       return null;
     }
 
+    const hitOffset = position;
+    const isTieToken = parts.length > 1;
+    const tieDuration = beatsForNoteValue(firstValue) * noteValues.length;
     hits.push({
-      offsetBeats: position,
+      offsetBeats: hitOffset,
+      chordLookupBeats: hitOffset,
+      tieGroupEndBeats: isTieToken ? hitOffset + tieDuration : undefined,
       accent: parsedParts[0]!.accent,
     });
+
+    if (isTieToken && hits.length >= 2) {
+      const prevToken = tokens[tokenIndex - 1];
+      const prevRest = parseRestTokenPart(prevToken);
+      if (prevRest === null) {
+        const prevParts = prevToken.split('-').map((part) => part.trim());
+        const prevParsed = prevParts.map((part) => parseNoteTokenPart(part));
+        if (!prevParsed.some((part) => part === null)) {
+          const prevFirstValue = prevParsed[0]!.noteValue;
+          if (prevFirstValue === firstValue) {
+            const prevHit = hits[hits.length - 2];
+            const prevDuration =
+              beatsForNoteValue(prevFirstValue) * prevParts.length;
+            if (
+              Math.abs(prevHit.offsetBeats + prevDuration - hitOffset) <
+              BEAT_EPSILON
+            ) {
+              prevHit.chordLookupBeats =
+                prevHit.offsetBeats - STRUM_CHORD_LOOKUP_EPSILON;
+            }
+          }
+        }
+      }
+    }
+
     position += beatsForNoteValue(firstValue) * noteValues.length;
   }
 

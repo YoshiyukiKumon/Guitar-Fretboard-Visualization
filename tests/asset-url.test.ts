@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   appBasePathFromLocation,
+  changelogPageUrl,
   sampleBaseUrlForSampleDir,
 } from '../src/app/asset-url';
 
@@ -36,6 +37,25 @@ describe('sampleBaseUrlForSampleDir', () => {
     try {
       expect(sampleBaseUrlForSampleDir('steel-guitar')).toBe(
         'https://example.github.io/Guitar-Fretboard-Visualization/samples/steel-guitar/',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('changelogPageUrl', () => {
+  it('builds absolute changelog URL from location', () => {
+    vi.stubGlobal('window', {
+      location: {
+        origin: 'https://example.github.io',
+        pathname: '/Guitar-Fretboard-Visualization/',
+        href: 'https://example.github.io/Guitar-Fretboard-Visualization/',
+      },
+    });
+    try {
+      expect(changelogPageUrl()).toBe(
+        'https://example.github.io/Guitar-Fretboard-Visualization/changelog.html',
       );
     } finally {
       vi.unstubAllGlobals();

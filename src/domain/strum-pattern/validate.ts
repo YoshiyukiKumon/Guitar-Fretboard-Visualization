@@ -47,7 +47,7 @@ export function validateStrumPatternDef(
     errors.push('パターンを入力してください');
   } else if (parseStrumPatternDef(def) === null) {
     errors.push(
-      'パターン形式が不正です。拍子に合う長さになるよう、4・8・16、8-8 のタイ、4(>) のアクセント、r の休符をカンマ区切りで指定してください',
+      'パターン形式が不正です。拍子に合う長さになるよう、4・8・16、8-8 のタイ、4(>) のアクセント、8(r) の休符をカンマ区切りで指定してください',
     );
   }
   return { ok: errors.length === 0, errors };

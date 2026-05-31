@@ -4,6 +4,7 @@ import {
   type InstrumentId,
 } from '../domain/settings/instrument-catalog';
 import { getInstrumentLabel, t } from '../i18n';
+import { changelogPageUrl } from '../app/asset-url';
 import { tonePlayer } from '../audio/tone-player';
 import { createVolumeControl } from './volume-control';
 
@@ -172,6 +173,19 @@ export function createSettingsView(
 
     root.appendChild(block);
   }
+
+  const footer = document.createElement('footer');
+  footer.className = 'settings-view__footer';
+
+  const changelogLink = document.createElement('a');
+  changelogLink.className = 'settings-view__changelog-link';
+  changelogLink.href = changelogPageUrl();
+  changelogLink.target = '_blank';
+  changelogLink.rel = 'noopener noreferrer';
+  changelogLink.textContent = t('settings.changelog.link');
+
+  footer.appendChild(changelogLink);
+  root.appendChild(footer);
 
   return root;
 }

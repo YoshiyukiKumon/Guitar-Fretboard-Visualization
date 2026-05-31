@@ -32,3 +32,8 @@ export function resolveAppBaseUrl(): string {
 export function sampleBaseUrlForSampleDir(sampleDir: string): string {
   return new URL(`samples/${sampleDir}/`, resolveAppBaseUrl()).href;
 }
+
+/** リリースノート HTML（`public/changelog.html`）の URL */
+export function changelogPageUrl(): string {
+  return new URL('changelog.html', resolveAppBaseUrl()).href;
+}

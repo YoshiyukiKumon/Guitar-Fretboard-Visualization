@@ -14,9 +14,11 @@
 | モード | 内容 |
 |--------|------|
 | **練習** | 現行 UI（キー・スケール・コード選択、指板、構成音、再生） |
-| **ライブラリ** | スケール/コード/ストロークパターンの一覧・編集、CSV、初期リセット |
+| **ライブラリ** | スケール/コード/ストローク/**ブロック**/曲の一覧・編集、CSV、初期リセット |
+| **ソング** | 曲選択・コード進行伴奏再生・進行チャート（編集はライブラリ） |
+| **設定** | 再生楽器・音量など |
 
-ヘッダー右に `[ 練習 | ライブラリ ]` のセグメント切替。既定は **練習**。
+ヘッダーの `[ 練習 | ライブラリ | ソング | 設定 ]` 切替。詳細は `docs/spec-song-mode.md`。
 
 ## データモデル
 
@@ -42,7 +44,7 @@ interface StrumPatternDef {
   name: string;
   /** 拍子（例: "4/4", "3/4", "12/8"） */
   timeSignature: string;
-  /** 例: "4, 4(>), 4, 4(>)" / "4(>), 8, 8(>)-8, 8, 4"（`-` はタイ、`(>)` はアクセント、`r` は休符） */
+  /** 例: "4, 4(>), 4, 4(>)" / "4(>), 8, 8(>)-8, 8, 4"（`-` はタイ、`(>)` はアクセント、`8(r)` は休符） */
   notation: string;
 }
 ```
@@ -52,7 +54,7 @@ interface StrumPatternDef {
 | キー | 内容 |
 |------|------|
 | `guitar-practice-settings` | 練習設定（既存）+ `appMode` |
-| `guitar-practice-custom-library` | `{ scales: ScaleDef[], chords: ChordDef[], strumPatterns: StrumPatternDef[] }` |
+| `guitar-practice-custom-library` | `{ scales, chords, strumPatterns, songBlocks, songs }` |
 
 組み込みデータはソースコード（`SCALES` / `CHORDS`）のまま。上書きしない。
 
@@ -84,7 +86,7 @@ interface StrumPatternDef {
 [ 初期状態にリセット ]
 ```
 
-- **ストロークタブ**: 名前 + 拍子 + パターン（カンマ区切り、`-` はタイ、`(>)` はアクセント、`r` は休符）。組み込み 5 種（4/4×3、3/4、12/8）。
+- **ストロークタブ**: 名前 + 拍子 + パターン（カンマ区切り、`-` はタイ、`(>)` はアクセント、`8(r)` は休符）。組み込み 5 種（4/4×3、3/4、12/8）。
 - アクセント `(>)` のストロークは現行 peak と同等、非アクセントは相対的に弱く再生（リピート時のみ）
 - **組み込み**: 一覧に「組み込み」バッジ。編集フォームは読み取り専用。「複製してカスタム追加」可。
 - **カスタム**: 追加・編集・削除可。
@@ -123,22 +125,26 @@ interface StrumPatternDef {
 ファイル名の例: `guitar-practice-library.csv`
 
 ```csv
-type,id,name,tones
-scale,my-dorian,My Dorian,"R|2 / 9|m3 / #9|4 / 11|5|6 / 13|b7"
-chord,my-m7,My m7,"R|m3 / #9|5|b7"
+type,id,name,tones,payload
+scale,my-dorian,My Dorian,"R|2 / 9|m3 / #9|4 / 11|5|6 / 13|b7",
+chord,my-m7,My m7,"R|m3 / #9|5|b7",
+song-block,my-a,A,,"|4/4||0/C/maj7||0/G/maj7"
+song,my-pop,Pop Demo,,"defaultKeyId=C,defaultTimeSignature=4/4,strumPatternId=builtin-strum-syncopation,bpm=120,playCount=1::block:my-a"
 ```
 
 | 列 | 必須 | 説明 |
 |----|------|------|
-| type | ○ | `scale` または `chord` |
+| type | ○ | `scale` / `chord` / `song-block` / `song` |
 | id | ○ | 英小文字・数字・ハイフン。組み込み ID と重複不可（画面の新規追加では自動発行、CSV 取り込み時は必須） |
-| name | ○ | 表示名 |
-| tones | ○ | 構成音を `\|` 区切り（カンマを含むラベルに対応） |
+| name | ○ | 表示名（song-block ではラベル） |
+| tones | △ | 構成音を `\|` 区切り（scale/chord のみ必須。song 系は空可） |
+| payload | △ | song-block / song のエンコード本体（詳細は `docs/spec-song-mode.md` §CSV） |
 
 - 文字コード: UTF-8
 - 1 行目はヘッダー必須
 - **ダウンロード**: 組み込み + カスタムのすべて（type 列付き）
 - **アップロード**: **カスタム定義のみ置換**（組み込みは変更しない）。CSV に組み込み行が含まれていても **スキップ** する。取り込み前に件数プレビューと確認
+- **song-block → song** の順で取り込み（曲がブロックを参照するため）
 
 #### バリデーション（保存・CSV 共通）
 
@@ -181,3 +187,7 @@ chord,my-m7,My m7,"R|m3 / #9|5|b7"
 | 1.5 | 2026-05-20 | ストロークパターンに `(>)` アクセント表記とリピート強弱 |
 | 1.6 | 2026-05-20 | 拍子（4/4, 3/4, 12/8 等）と休符 `r`、組み込み 3/4・シャッフル追加 |
 | 1.7 | 2026-05-20 | ストローク編集プレビュー（BPM・ループ再生）、既定 BPM 90・既定パターン シンコペーション |
+| 1.8 | 2026-05-30 | ソングタブ・永続化フィールド追加 — `docs/spec-song-mode.md` |
+| 1.9 | 2026-05-30 | ブロック（songBlocks）永続化 — `docs/spec-song-mode.md` v1.3 |
+| 2.0 | 2026-05-30 | CSV に song-block / song 行（payload 列）— `docs/spec-song-mode.md` v1.4 |
+| 2.1 | 2026-05-30 | ストローク休符を `8(r)` 形式に変更（音価指定） |

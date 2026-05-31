@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>リリースノート — ギター練習ツール</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --color-bg: #1a1410;
+      --color-surface: #2a221c;
+      --color-border: #4a3d32;
+      --color-text: #f0e6dc;
+      --color-muted: #b8aea3;
+      --color-accent: #e07b39;
+      --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 1.25rem 1rem 2.5rem;
+      font-family: var(--font-sans);
+      font-size: 0.95rem;
+      line-height: 1.65;
+      color: var(--color-text);
+      background: var(--color-bg);
+    }
+
+    .page {
+      max-width: 42rem;
+      margin: 0 auto;
+    }
+
+    .page__back {
+      margin: 0 0 1rem;
+    }
+
+    .page__back a {
+      color: var(--color-accent);
+      text-decoration: none;
+    }
+
+    .page__back a:hover {
+      text-decoration: underline;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .page__meta {
+      margin: 0 0 1.5rem;
+      color: var(--color-muted);
+      font-size: 0.85rem;
+    }
+
+    .release {
+      margin-bottom: 1.75rem;
+      padding: 1rem 1.1rem;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: var(--color-surface);
+    }
+
+    .release__header {
+      margin: 0 0 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .release__version {
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+
+    .release__date {
+      margin: 0.15rem 0 0;
+      color: var(--color-muted);
+      font-size: 0.85rem;
+    }
+
+    .release h3 {
+      margin: 0.85rem 0 0.35rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--color-accent);
+    }
+
+    .release ul {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+
+    .release li {
+      margin: 0.2rem 0;
+    }
+
+    .page__footer {
+      margin-top: 2rem;
+      color: var(--color-muted);
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <p class="page__back"><a href="./index.html">← アプリに戻る</a></p>
+    <h1>リリースノート</h1>
+    <p class="page__meta">ギター練習ツール — 変更履歴</p>
+
+    <article class="release" id="v0-3-0">
+      <header class="release__header">
+        <h2 class="release__version">0.3.0</h2>
+        <p class="release__date">2026-05-20</p>
+      </header>
+      <h3>追加</h3>
+      <ul>
+        <li>ソングモード（曲単位のコード進行・ストローク伴奏・進行チャート・指板連動）</li>
+        <li>ライブラリ &gt; 曲（小節編集、セクション構成、CRUD、CSV 入出力）</li>
+        <li>組み込み曲: ii-V-I repeat、Sample POP、12 Bar Blues</li>
+        <li>ソング画面: 再生回数・移調（±6 半音）のセッション変更</li>
+        <li>組み込み曲・カスタム曲の「複製してカスタム追加」</li>
+      </ul>
+      <h3>変更</h3>
+      <ul>
+        <li>ライブラリのブロックタブを廃止し、曲タブ内にセクション編集を統合</li>
+        <li>進行チャートは登録小節そのまま表示（リピート展開は再生時のみ）</li>
+        <li>組み込み曲 readonly の複製ボタンをフッターに統一</li>
+      </ul>
+      <h3>修正</h3>
+      <ul>
+        <li>playCount の二重適用（意図より長く再生される問題）</li>
+        <li>プリセット複製時にセクション（A/B）が空になる storage 不具合</li>
+        <li>複製保存時の unknown blockId エラー</li>
+      </ul>
+    </article>
+
+    <article class="release" id="v0-2-0">
+      <header class="release__header">
+        <h2 class="release__version">0.2.0</h2>
+        <p class="release__date">2026-05-30</p>
+      </header>
+      <h3>追加</h3>
+      <ul>
+        <li>構成音パネル（スケール・アルペジオ・コード同時・リピート、BPM、ストロークパターン）</li>
+        <li>8 分音符グリッド同期の重ね再生</li>
+        <li>リピート用とその他再生用の音色を個別選択</li>
+        <li>日本語 / English 切替</li>
+        <li>ストロークパターン組み込み 5 種とカスタム編集</li>
+        <li>ナイロン基準の音色音量平準化</li>
+        <li>ナビゲーションのアイコン化</li>
+      </ul>
+      <h3>変更</h3>
+      <ul>
+        <li>リピート再生の内部ゲインを 35% に設定</li>
+        <li>スケール/アルペジオ最終音の自然減衰</li>
+        <li>ストローク組み込み名を英語表記に統一</li>
+      </ul>
+      <h3>修正</h3>
+      <ul>
+        <li>再生中の停止ボタン（■）表示不具合</li>
+      </ul>
+    </article>
+
+    <article class="release" id="v0-1-4">
+      <header class="release__header">
+        <h2 class="release__version">0.1.4</h2>
+        <p class="release__date">2026-05-24</p>
+      </header>
+      <h3>変更</h3>
+      <ul>
+        <li>リポジトリ名の綴りを Fretboard に統一</li>
+      </ul>
+    </article>
+
+    <article class="release" id="v0-1-3">
+      <header class="release__header">
+        <h2 class="release__version">0.1.3</h2>
+        <p class="release__date">2026-05-23</p>
+      </header>
+      <h3>追加</h3>
+      <ul>
+        <li>設定タブ（再生楽器 7 種・音量）</li>
+        <li>サンプル再生音源（ギター各種・ピアノ）</li>
+        <li>ダイアトニックコード一覧</li>
+        <li>音名(カナ)モード</li>
+      </ul>
+      <h3>変更</h3>
+      <ul>
+        <li>スマホ向け UI コンパクト化、音量スライダー延長</li>
+        <li>再生タップ領域の拡大</li>
+      </ul>
+      <h3>修正</h3>
+      <ul>
+        <li>iPhone Safari の音声再生</li>
+        <li>iOS バックグラウンド復帰後の AudioContext 復旧</li>
+        <li>指板横スクロール、ライブラリスクロール位置の維持</li>
+        <li>オクターブ下げ境界の調整</li>
+      </ul>
+    </article>
+
+    <article class="release" id="v0-1-2">
+      <header class="release__header">
+        <h2 class="release__version">0.1.2</h2>
+        <p class="release__date">2026-05-21</p>
+      </header>
+      <h3>追加</h3>
+      <ul>
+        <li>カスタムスケール・コードライブラリ</li>
+        <li>練習 / ライブラリ二モード</li>
+        <li>コードテンション再生</li>
+        <li>コードルート基準のインターバル表示</li>
+      </ul>
+      <h3>変更</h3>
+      <ul>
+        <li>指板ドット表示・音名表記・UX 改善</li>
+      </ul>
+    </article>
+
+    <article class="release" id="v0-1-1">
+      <header class="release__header">
+        <h2 class="release__version">0.1.1</h2>
+        <p class="release__date">2026-05-20</p>
+      </header>
+      <h3>追加</h3>
+      <ul>
+        <li>指板カプセルのタップ再生</li>
+        <li>フラットキー・異名同音対応の音名表記</li>
+        <li>フレット目印の Grid 配置</li>
+      </ul>
+      <h3>変更</h3>
+      <ul>
+        <li>GitHub Pages 自動デプロイ</li>
+      </ul>
+    </article>
+
+    <article class="release" id="v0-1-0">
+      <header class="release__header">
+        <h2 class="release__version">0.1.0</h2>
+        <p class="release__date">2026-05-20</p>
+      </header>
+      <h3>追加</h3>
+      <ul>
+        <li>ギター指板ビジュアライゼーション初版</li>
+        <li>キー・スケール・コード選択と指板表示</li>
+        <li>スタンドアロン HTML ビルド</li>
+      </ul>
+    </article>
+
+    <p class="page__footer">
+      Markdown 版: <a href="https://github.com/YoshiyukiKumon/Guitar-Fretboard-Visualization/blob/main/CHANGELOG.md" style="color: var(--color-accent);">CHANGELOG.md</a>
+    </p>
+  </div>
+</body>
+</html>

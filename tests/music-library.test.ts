@@ -7,6 +7,7 @@ import {
   resetLibraryToInitial,
   upsertCustomScale,
 } from '../src/domain/music-library/custom-crud';
+import { upsertCustomSongBlock } from '../src/domain/music-library/song-crud';
 import { getScaleById, listScales } from '../src/domain/music-library/registry';
 import { resetCustomLibrary } from '../src/domain/music-library/storage';
 import { generateCustomScaleId } from '../src/domain/music-library/generate-id';
@@ -84,6 +85,30 @@ scale,a,Scale A,R|3|5
 scale,a,Scale B,R|3|5`;
     const preview = parseLibraryCsv(csv);
     expect(preview.errors.length).toBeGreaterThan(0);
+  });
+
+  it('accepts legacy header without payload column', () => {
+    const csv = `type,id,name,tones
+scale,csv-scale,CSV Scale,R|3|5`;
+    const preview = parseLibraryCsv(csv);
+    expect(preview.errors).toEqual([]);
+    expect(preview.scales).toHaveLength(1);
+  });
+
+  it('exports and imports custom song block', () => {
+    upsertCustomSongBlock({
+      id: 'csv-block',
+      label: 'CSV Block',
+      measures: [
+        { events: [{ offsetBeats: 0, chordRootKeyId: 'C', chordId: 'major-triad' }] },
+      ],
+    });
+    const csv = exportLibraryCsv();
+    expect(csv).toContain('song-block,csv-block');
+    resetLibraryToInitial();
+    const preview = parseLibraryCsv(csv);
+    expect(preview.errors).toEqual([]);
+    expect(preview.songBlocks.some((b) => b.id === 'csv-block')).toBe(true);
   });
 });
 

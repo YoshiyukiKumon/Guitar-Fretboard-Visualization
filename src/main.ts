@@ -1,3 +1,4 @@
+import '@fontsource/noto-music/400.css';
 import './styles/main.css';
 import { diatonicRepeatButtonId, tonePlayer } from './audio/tone-player';
 import { remapChordKeyIdForScaleKey } from './domain/chord-root-options';
@@ -12,6 +13,9 @@ import type { AppSettings } from './app/storage';
 import { setLocale, t } from './i18n';
 import { renderApp } from './ui/app-shell';
 import type { LibraryViewState } from './ui/library-view';
+import { setLibraryMobileDetail } from './ui/library-list-editor';
+import { duplicateSongAsCustom } from './domain/music-library/song-crud';
+import { getSongSource } from './domain/song/song-registry';
 
 const appRootEl = document.querySelector('#app');
 if (!(appRootEl instanceof HTMLDivElement)) {
@@ -208,6 +212,32 @@ function refresh(partial?: Partial<AppSettings>): void {
     onRepeatInstrumentChange: (repeatInstrumentId) => {
       saveSettings({ ...settings, repeatInstrumentId });
       refresh({ repeatInstrumentId });
+    },
+    onSongIdChange: (songId) => {
+      saveSettings({ ...settings, songId });
+      refresh({ songId });
+    },
+    onEditSongInLibrary: (songId) => {
+      if (getSongSource(songId) === 'builtin') {
+        const result = duplicateSongAsCustom(songId);
+        libraryState = {
+          ...libraryState,
+          tab: 'song',
+          selectedSongId: '__new__',
+          draftSong: result?.song ?? null,
+          draftSongBlocks: result?.blocks ?? null,
+        };
+      } else {
+        libraryState = {
+          ...libraryState,
+          tab: 'song',
+          selectedSongId: songId,
+          draftSong: null,
+        };
+      }
+      setLibraryMobileDetail('song', true);
+      saveSettings({ ...settings, appMode: 'library' });
+      refresh({ appMode: 'library' });
     },
   });
 }

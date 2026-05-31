@@ -53,6 +53,15 @@ import {
   type ParsedStrumPattern,
   type StrumPatternDef,
 } from '../domain/strum-pattern/strum-pattern';
+import type { ExpandedMeasure } from '../domain/song/song-types';
+import {
+  buildSongScheduleHits,
+  findActiveSongHitIndex,
+  resolveSongHitSemitones,
+  songCycleDurationSec,
+  type SongScheduleHit,
+} from '../domain/song/song-playback-plan';
+import { clampSongTranspose } from '../domain/song/song-transpose';
 
 /** 構成音パネルで停止トグル対象の再生種別 */
 export type TonePlaybackMode = 'scale' | 'arpeggio' | 'repeat' | null;
@@ -63,7 +72,26 @@ export type PlaybackButtonId =
   | 'tone-panel:arpeggio'
   | 'tone-panel:repeat'
   | 'library:strum-preview'
+  | 'song:play'
   | `diatonic-repeat:${number}`;
+
+export interface SongPlaybackPosition {
+  measurePlaybackIndex: number;
+  hitOffsetBeats: number;
+  chordRootKeyId: string;
+  chordId: string;
+}
+
+/** 曲再生が全体かセクション単位か */
+export type SongPlaybackScope = 'full' | 'section';
+
+export interface PlaySongOptions {
+  scope: SongPlaybackScope;
+  /** scope が section のときの parts インデックス */
+  partIndex?: number;
+  /** セッション移調（半音、-6〜+6） */
+  transposeSemitones?: number;
+}
 
 export function diatonicRepeatButtonId(degree: number): PlaybackButtonId {
   return `diatonic-repeat:${degree}`;
@@ -122,6 +150,17 @@ export class TonePlayer {
   /** ライブラリプレビュー用の未保存ストロークパターン */
   private repeatPreviewPattern: ParsedStrumPattern | null = null;
   private pendingRepeatPreviewPattern: ParsedStrumPattern | null = null;
+  private songHits: SongScheduleHit[] = [];
+  private songCycleDurationSec = 0;
+  private songInfinite = false;
+  private songPlayCount = 1;
+  private songEndTimeSec = 0;
+  private songPlaybackScope: SongPlaybackScope | null = null;
+  private songPlaybackPartIndex: number | null = null;
+  private songTransposeSemitones = 0;
+  private songPositionListeners = new Set<
+    (position: SongPlaybackPosition | null) => void
+  >();
   private playbackListeners = new Set<() => void>();
   private overlaySources = new Set<AudioScheduledSourceNode>();
   private repeatSources = new Set<AudioScheduledSourceNode>();
@@ -172,10 +211,10 @@ export class TonePlayer {
     }
     return {
       hits: [
-        { offsetBeats: 0, accent: false },
-        { offsetBeats: 1, accent: true },
-        { offsetBeats: 2, accent: false },
-        { offsetBeats: 3, accent: true },
+        { offsetBeats: 0, chordLookupBeats: 0, accent: false },
+        { offsetBeats: 1, chordLookupBeats: 1, accent: true },
+        { offsetBeats: 2, chordLookupBeats: 2, accent: false },
+        { offsetBeats: 3, chordLookupBeats: 3, accent: true },
       ],
       measureBeats: 4,
       timeSignature: '4/4',
@@ -197,6 +236,18 @@ export class TonePlayer {
     );
   }
 
+  getSongPlaybackScope(): SongPlaybackScope | null {
+    return this.isSongActive() ? this.songPlaybackScope : null;
+  }
+
+  isSectionPlaybackActive(partIndex: number): boolean {
+    return (
+      this.isSongActive() &&
+      this.songPlaybackScope === 'section' &&
+      this.songPlaybackPartIndex === partIndex
+    );
+  }
+
   private isRepeatActive(): boolean {
     return this.repeatActiveButtonId !== null;
   }
@@ -206,6 +257,25 @@ export class TonePlayer {
     return () => {
       this.playbackListeners.delete(listener);
     };
+  }
+
+  subscribeSongPosition(
+    listener: (position: SongPlaybackPosition | null) => void,
+  ): () => void {
+    this.songPositionListeners.add(listener);
+    return () => {
+      this.songPositionListeners.delete(listener);
+    };
+  }
+
+  private notifySongPosition(position: SongPlaybackPosition | null): void {
+    for (const listener of this.songPositionListeners) {
+      listener(position);
+    }
+  }
+
+  private isSongActive(): boolean {
+    return this.repeatActiveButtonId === 'song:play';
   }
 
   private notifyPlaybackChange(): void {
@@ -258,6 +328,15 @@ export class TonePlayer {
     this.repeatUseGuitarStrum = false;
     this.repeatPreviewPattern = null;
     this.pendingRepeatPreviewPattern = null;
+    this.songHits = [];
+    this.songCycleDurationSec = 0;
+    this.songInfinite = false;
+    this.songPlayCount = 1;
+    this.songEndTimeSec = 0;
+    this.songPlaybackScope = null;
+    this.songPlaybackPartIndex = null;
+    this.songTransposeSemitones = 0;
+    this.notifySongPosition(null);
   }
 
   private stopSourcesIn(set: Set<AudioScheduledSourceNode>): void {
@@ -287,6 +366,7 @@ export class TonePlayer {
   private stopRepeatPlayback(): void {
     this.repeatSession += 1;
     this.repeatActiveButtonId = null;
+    this.clearPlaybackEndTimer();
     this.clearRepeatScheduler();
     this.stopSourcesIn(this.repeatSources);
     this.syncLegacyPlaybackFields();
@@ -350,6 +430,16 @@ export class TonePlayer {
     this.playbackEndTimer = setTimeout(() => {
       this.playbackEndTimer = null;
       this.stopOverlayPlayback();
+    }, totalSec * 1000 + 50);
+  }
+
+  private scheduleSongPlaybackEnd(totalSec: number): void {
+    this.clearPlaybackEndTimer();
+    this.playbackEndTimer = setTimeout(() => {
+      this.playbackEndTimer = null;
+      if (this.isSongActive()) {
+        this.stopRepeatPlayback();
+      }
     }, totalSec * 1000 + 50);
   }
 
@@ -705,6 +795,71 @@ export class TonePlayer {
     this.startRepeatScheduler(session);
   }
 
+  /** 展開済み小節列をストローク伴奏で再生 */
+  async playSong(
+    measures: readonly ExpandedMeasure[],
+    strumPatternId: string,
+    playCount: number,
+    bpm?: number,
+    options: PlaySongOptions = { scope: 'full' },
+  ): Promise<void> {
+    if (measures.length === 0) {
+      return;
+    }
+
+    const def =
+      getStrumPatternById(strumPatternId) ??
+      getStrumPatternById(DEFAULT_STRUM_PATTERN_ID);
+    const parsed = def ? parseStrumPatternDef(def) : null;
+    if (!parsed) {
+      return;
+    }
+
+    this.unlockFromUserGesture();
+    this.stopOverlayPlayback();
+    this.stopRepeatPlayback();
+
+    if (bpm !== undefined) {
+      this.bpm = clampBpm(bpm);
+    }
+
+    this.songInfinite = playCount === 0;
+    this.songPlayCount = this.songInfinite
+      ? 0
+      : Math.max(1, Math.floor(playCount));
+    const beat = this.beatSec();
+    this.songHits = buildSongScheduleHits(measures, strumPatternId, beat);
+    this.songCycleDurationSec = songCycleDurationSec(measures, beat);
+    this.songEndTimeSec = this.songInfinite
+      ? 0
+      : this.songCycleDurationSec * this.songPlayCount;
+
+    this.songPlaybackScope = options.scope;
+    this.songPlaybackPartIndex =
+      options.scope === 'section' ? (options.partIndex ?? null) : null;
+    this.songTransposeSemitones = clampSongTranspose(
+      options.transposeSemitones ?? 0,
+    );
+
+    this.setPlaybackState('repeat', 'song:play');
+
+    const ctx = await this.prepareContext();
+    const session = ++this.sessionId;
+    const startAt = ctx.currentTime + 0.05;
+
+    this.repeatSession = session;
+    this.repeatScheduledUntil = startAt;
+    this.repeatEpoch = startAt;
+    this.repeatUseGuitarStrum = instrumentUsesGuitarStrum(
+      getInstrumentDefinition(this.repeatInstrumentId),
+    );
+    this.startRepeatScheduler(session);
+    this.notifySongPositionFromTime(ctx.currentTime);
+    if (!this.songInfinite && this.songEndTimeSec > 0) {
+      this.scheduleSongPlaybackEnd(this.songEndTimeSec);
+    }
+  }
+
   private startRepeatScheduler(session: number): void {
     const tick = (): void => {
       this.runRepeatSchedulerTick(session);
@@ -717,6 +872,11 @@ export class TonePlayer {
   private runRepeatSchedulerTick(session: number): void {
     if (session !== this.repeatSession || !this.isRepeatActive()) {
       this.clearRepeatScheduler();
+      return;
+    }
+
+    if (this.isSongActive()) {
+      this.runSongSchedulerTick(session);
       return;
     }
 
@@ -800,6 +960,149 @@ export class TonePlayer {
       measureStart += measureDuration;
     }
     return measureStart;
+  }
+
+  private runSongSchedulerTick(session: number): void {
+    const ctx = this.context;
+    if (!ctx || !this.isSongActive()) {
+      return;
+    }
+
+    const beat = this.beatSec();
+    const hitDuration = Math.min(CHORD_DURATION_SEC, beat * 0.95);
+    const target = ctx.currentTime + REPEAT_SCHEDULE_AHEAD_SEC;
+    if (this.repeatScheduledUntil >= target) {
+      this.notifySongPositionFromTime(ctx.currentTime);
+      return;
+    }
+
+    this.repeatScheduledUntil = this.scheduleSongThrough(
+      ctx,
+      session,
+      hitDuration,
+      this.repeatScheduledUntil,
+      target,
+    );
+    this.notifySongPositionFromTime(ctx.currentTime);
+  }
+
+  private notifySongPositionFromTime(now: number): void {
+    if (!this.isSongActive() || this.songHits.length === 0) {
+      this.notifySongPosition(null);
+      return;
+    }
+    const elapsed = now - this.repeatEpoch;
+    if (elapsed < 0) {
+      this.notifySongPosition(null);
+      return;
+    }
+    if (!this.songInfinite && elapsed >= this.songEndTimeSec - 1e-6) {
+      this.stopRepeatPlayback();
+      return;
+    }
+    const searchElapsed =
+      this.songInfinite || this.songPlayCount > 1
+        ? ((elapsed % this.songCycleDurationSec) + this.songCycleDurationSec) %
+          this.songCycleDurationSec
+        : elapsed;
+    const hitIndex = findActiveSongHitIndex(
+      this.songHits,
+      searchElapsed,
+      this.songInfinite ? this.songCycleDurationSec : Number.POSITIVE_INFINITY,
+    );
+    const hit = hitIndex >= 0 ? this.songHits[hitIndex] : undefined;
+    if (!hit) {
+      this.notifySongPosition(null);
+      return;
+    }
+    this.notifySongPosition({
+      measurePlaybackIndex: hit.measurePlaybackIndex,
+      hitOffsetBeats: hit.hitOffsetBeats,
+      chordRootKeyId: hit.chordRootKeyId,
+      chordId: hit.chordId,
+    });
+  }
+
+  private scheduleSongThrough(
+    ctx: AudioContext,
+    session: number,
+    hitDuration: number,
+    fromTime: number,
+    toTime: number,
+  ): number {
+    const epoch = this.repeatEpoch > 0 ? this.repeatEpoch : fromTime;
+    const cycleDuration = this.songCycleDurationSec;
+    if (cycleDuration <= 0 || this.songHits.length === 0) {
+      return fromTime;
+    }
+
+    const definition = getInstrumentDefinition(this.repeatInstrumentId);
+    const useGuitarStrum = instrumentUsesGuitarStrum(definition);
+    let scheduledUntil = fromTime;
+    let cycleIndex = Math.max(0, Math.floor((fromTime - epoch) / cycleDuration));
+
+    while (scheduledUntil < toTime) {
+      if (session !== this.repeatSession) {
+        break;
+      }
+
+      const cycleStart = epoch + cycleIndex * cycleDuration;
+      if (!this.songInfinite && cycleIndex >= this.songPlayCount) {
+        break;
+      }
+
+      for (const hit of this.songHits) {
+        const noteTime = cycleStart + hit.timeSec;
+        if (noteTime < fromTime) {
+          continue;
+        }
+        if (noteTime >= toTime) {
+          break;
+        }
+
+        const resolved = resolveSongHitSemitones(
+          hit.chordRootKeyId,
+          hit.chordId,
+          this.songTransposeSemitones,
+        );
+        if (!resolved?.chordKey) {
+          continue;
+        }
+
+        const gainMultiplier = strumHitGain(hit.accent);
+
+        const playbackSemitones = useGuitarStrum
+          ? [...resolved.semitones].sort((a, b) => a - b)
+          : resolved.semitones;
+
+        for (let i = 0; i < playbackSemitones.length; i++) {
+          const semitone = playbackSemitones[i];
+          const noteStart = useGuitarStrum
+            ? noteTime + i * GUITAR_STRUM_NOTE_GAP_SEC
+            : noteTime;
+          const midi = midiNoteNumberForScaleChordPlayback(
+            resolved.chordKey.pitchClass,
+            semitone,
+          );
+          this.scheduleNote(
+            ctx,
+            midi,
+            noteStart,
+            hitDuration,
+            gainMultiplier,
+            'repeat',
+          );
+        }
+        scheduledUntil = Math.max(scheduledUntil, noteTime + 1e-9);
+      }
+
+      cycleIndex++;
+      if (this.songInfinite && cycleStart + cycleDuration > toTime + cycleDuration) {
+        break;
+      }
+    }
+
+    return scheduledUntil;
   }
 
   private async playChordSemitones(
